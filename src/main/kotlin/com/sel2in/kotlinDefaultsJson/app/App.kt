@@ -1,4 +1,4 @@
-package com.sel2in.kotlinDefaultsJson
+package com.sel2in.kotlinDefaultsJson.app
 
 import io.micronaut.runtime.Micronaut
 

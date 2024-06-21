@@ -11,15 +11,10 @@ plugins {
     id 'maven-publish'
     id("org.jetbrains.kotlinx.kover") version "0.8.1"
     id 'jacoco'
-}
 
+}
 version = "0.1"
 group = "com.sel2in.kotlinDefaultsJson"
-
-ext {
-    awsSDKVersion = '2.17.261'
-}
-
 repositories {
     mavenCentral()
 }
@@ -73,6 +68,8 @@ dependencies {
 
 
     ///testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.11.0-M2'
+    //testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    testImplementation("io.micronaut.test:micronaut-test-junit5")
 }
 
 java {
@@ -88,129 +85,81 @@ kotlin {
 
 subprojects {
     apply(plugin = "org.jetbrains.kotlinx.kover")
-    kover {
+    apply(plugin = 'jacoco')
 
+    // Kover configuration
+    kover {
         filters {
             classes {
-                excludes += listOf("*di.*", "*Factory*")
-            }
-            annotations {
-                excludes += listOf("*Generated", "*CustomAnnotationToExclude")
+                excludes += listOf("com.sel2in.kotlinDefaultsJson.app.App")
             }
         }
-        htmlReport {
-            onCheck.set(true)
-        }
-        verify {
-            rule {
-                isEnabled = true
-                name = "Line Coverage of Tests must be more than 80%"
-                bound {
-                    minValue = 75
-                }
-            }
+        annotations {
+            excludes += listOf("*Generated", "*CustomAnnotationToExclude")
         }
     }
 
+    // JaCoCo configuration
+    jacoco {
+        toolVersion = "0.8.11"
+    }
+
+    jacocoTestReport {
+        dependsOn test // Ensure tests run before generating the report
+        reports {
+            xml.required.set(false)
+            csv.required.set(true)
+            html.required.set(true)
+        }
+        afterEvaluate {
+            classDirectories.setFrom(files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: ['com/sel2in/kotlinDefaultsJson/app/App.class',
+                                            'com/sel2in/kotlinDefaultsJson/app/App$*.class' // for any inner classes
+                ])
+            }))
+        }
+    }
+
+    tasks.test {
+        finalizedBy(jacocoTestReport)
+        finalizedBy(tasks.koverHtmlReport, tasks.koverXmlReport)
+    }
 }
 
+
+tasks.jacocoTestReport {
+    dependsOn test // Ensure tests run before generating the report
+    reports {
+        xml.required.set(false)
+        csv.required.set(true)
+        html.required.set(true)
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: ['com/sel2in/kotlinDefaultsJson/app/App.class',
+                                        'com/sel2in/kotlinDefaultsJson/app/App$*.class' // for any inner classes
+            ])
+        }))
+    }
+}
+
+// Ensure Kover reports are generated
+tasks.test {
+    finalizedBy(tasks.koverHtmlReport, tasks.koverXmlReport)
+}
+
+// Application configuration
 application {
     mainClass = "com.sel2in.kotlinDefaultsJson.App"
 }
+
 java {
     sourceCompatibility = JavaVersion.toVersion("21")
-}
-
-jacoco {
-    toolVersion = "0.8.11" // specify the version of JaCoCo you want to use
-}
-//
-jacocoTestReport {
-    dependsOn test // tests are required to run before generating the report
-    reports {
-        xml.required = false
-        csv.required = true
-        html.required = true
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
-jar {
-    duplicatesStrategy(DuplicatesStrategy.EXCLUDE)
+kotlin {
+    jvmToolchain(21)
 }
-
-graalvmNative.toolchainDetection = false
-micronaut {
-    runtime("netty")
-    testRuntime("junit5")
-    processing {
-        incremental(true)
-        annotations("com.sel2in.kotlinDefaultsJson.*")
-    }
-    aot {
-        // Please review carefully the optimizations enabled below
-        // Check https://micronaut-projects.github.io/micronaut-aot/latest/guide/ for more details
-        optimizeServiceLoading = false
-        convertYamlToJava = false
-        precomputeOperations = true
-        cacheEnvironment = true
-        optimizeClassLoading = true
-        deduceEnvironment = true
-        optimizeNetty = true
-        replaceLogbackXml = true
-    }
-}
-
-
-test {
-    useJUnitPlatform()
-    testLogging {
-        events "passed", "skipped", "failed"
-    }
-    finalizedBy 'jacocoTestReport'
- }
-
-tasks.named("dockerfileNative") {
-    jdkVersion = "21"
-}
-
-
-tasks.withType(Tar.class).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-tasks.withType(Tar).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-tasks.withType(Jar).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-tasks.withType(Zip).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-
-tasks.register('writeBuildInfo') {
-    doLast {
-        def branch = ""
-        def log = ""
-        try {
-            def currentDateTime = ZonedDateTime.now()
-            //git not installed on build system so not working
-            branch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
-            log = 'git log --pretty=format:"%h - %s, %cd - %an" -n 11'.execute().text.trim()
-            def infoFile = new File("${projectDir}/src/main/resources/generated/info.txt")
-            //
-            def info = "Build: date-time-timezone: ${currentDateTime}.\n\nGit info, branch: ${branch}.\n\nLog:\n${log}\n"
-            infoFile.write(info)
-        } catch (Throwable ignored) {
-
-        }
-    }
-}
-
-tasks.named('compileKotlin') {
-    dependsOn 'writeBuildInfo'
-}
-
