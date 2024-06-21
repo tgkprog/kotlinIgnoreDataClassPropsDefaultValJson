@@ -1,0 +1,9 @@
+micronaut:
+  application:
+    name: PublishingService
+  server:
+    context-path: /v1
+    port: 8084
+    thread-selection: auto
+  beans:
+    lazy-init: false

@@ -1,0 +1,216 @@
+import java.time.ZonedDateTime
+
+plugins {
+    id("org.jetbrains.kotlin.jvm") version "1.9.24"
+    id("org.jetbrains.kotlin.plugin.allopen") version "1.9.24"
+    id("com.google.devtools.ksp") version "1.9.24-1.0.20"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("io.micronaut.application") version "4.4.0"
+    id("io.micronaut.aot") version "4.4.0"
+    id('org.openapi.generator') version "5.4.0"
+    id 'maven-publish'
+    id("org.jetbrains.kotlinx.kover") version "0.8.1"
+    id 'jacoco'
+}
+
+version = "0.1"
+group = "com.sel2in.kotlinDefaultsJson"
+
+ext {
+    awsSDKVersion = '2.17.261'
+}
+
+repositories {
+    mavenCentral()
+}
+
+//TBD TODO later. whether we need this?
+//sourceSets.test.java.srcDirs += "${project.buildDir}/generated/openapi/src/main/java"
+dependencies {
+    ksp("io.micronaut:micronaut-http-validation")
+    ksp("io.micronaut.serde:micronaut-serde-processor")
+    ksp("io.micronaut.validation:micronaut-validation-processor")
+
+    implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
+
+    annotationProcessor("io.micronaut:micronaut-http-validation")
+    annotationProcessor("io.micronaut.serde:micronaut-serde-processor")
+
+    implementation("io.micronaut.serde:micronaut-serde-jackson")
+    //implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
+    //implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
+    compileOnly("io.micronaut:micronaut-http-client")
+
+    //implementation("io.micronaut.validation:micronaut-validation")
+    //implementation("jakarta.validation:jakarta.validation-api:3.0.0")
+
+    runtimeOnly("ch.qos.logback:logback-classic")
+    //runtimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin")
+    testImplementation("io.micronaut:micronaut-http-client")
+
+    implementation("io.micronaut:micronaut-management")
+    implementation("io.micronaut.micrometer:micronaut-micrometer-registry-prometheus")
+    implementation("io.micronaut:micronaut-runtime")
+
+    implementation 'io.swagger:swagger-annotations:1.6.14'
+//    implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+//    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+//    implementation 'com.google.code.gson:gson:2.10.1'
+//    implementation 'io.gsonfire:gson-fire:1.9.0'
+//    implementation 'org.threeten:threetenbp:1.6.9'
+//    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+//    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+    implementation("io.micronaut:micronaut-http")
+    //implementation("io.micronaut:micronaut-inject")
+
+//    implementation("io.micronaut.aws:micronaut-aws-sdk-v2")
+//    implementation("software.amazon.awssdk:dynamodb-enhanced:${awsSDKVersion}")
+
+    runtimeOnly("org.yaml:snakeyaml")
+
+    //testImplementation 'org.junit.jupiter:junit-jupiter-api:5.11.0-M2'
+    //testRuntimeOnly 'io.micronaut.test:micronaut-test-junit5:4.3.0'
+
+
+    ///testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.11.0-M2'
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+
+subprojects {
+    apply(plugin = "org.jetbrains.kotlinx.kover")
+    kover {
+
+        filters {
+            classes {
+                excludes += listOf("*di.*", "*Factory*")
+            }
+            annotations {
+                excludes += listOf("*Generated", "*CustomAnnotationToExclude")
+            }
+        }
+        htmlReport {
+            onCheck.set(true)
+        }
+        verify {
+            rule {
+                isEnabled = true
+                name = "Line Coverage of Tests must be more than 80%"
+                bound {
+                    minValue = 75
+                }
+            }
+        }
+    }
+
+}
+
+application {
+    mainClass = "com.sel2in.kotlinDefaultsJson.App"
+}
+java {
+    sourceCompatibility = JavaVersion.toVersion("21")
+}
+
+jacoco {
+    toolVersion = "0.8.11" // specify the version of JaCoCo you want to use
+}
+//
+jacocoTestReport {
+    dependsOn test // tests are required to run before generating the report
+    reports {
+        xml.required = false
+        csv.required = true
+        html.required = true
+    }
+}
+
+jar {
+    duplicatesStrategy(DuplicatesStrategy.EXCLUDE)
+}
+
+graalvmNative.toolchainDetection = false
+micronaut {
+    runtime("netty")
+    testRuntime("junit5")
+    processing {
+        incremental(true)
+        annotations("com.sel2in.kotlinDefaultsJson.*")
+    }
+    aot {
+        // Please review carefully the optimizations enabled below
+        // Check https://micronaut-projects.github.io/micronaut-aot/latest/guide/ for more details
+        optimizeServiceLoading = false
+        convertYamlToJava = false
+        precomputeOperations = true
+        cacheEnvironment = true
+        optimizeClassLoading = true
+        deduceEnvironment = true
+        optimizeNetty = true
+        replaceLogbackXml = true
+    }
+}
+
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    finalizedBy 'jacocoTestReport'
+ }
+
+tasks.named("dockerfileNative") {
+    jdkVersion = "21"
+}
+
+
+tasks.withType(Tar.class).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.withType(Tar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+tasks.withType(Zip).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+
+tasks.register('writeBuildInfo') {
+    doLast {
+        def branch = ""
+        def log = ""
+        try {
+            def currentDateTime = ZonedDateTime.now()
+            //git not installed on build system so not working
+            branch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+            log = 'git log --pretty=format:"%h - %s, %cd - %an" -n 11'.execute().text.trim()
+            def infoFile = new File("${projectDir}/src/main/resources/generated/info.txt")
+            //
+            def info = "Build: date-time-timezone: ${currentDateTime}.\n\nGit info, branch: ${branch}.\n\nLog:\n${log}\n"
+            infoFile.write(info)
+        } catch (Throwable ignored) {
+
+        }
+    }
+}
+
+tasks.named('compileKotlin') {
+    dependsOn 'writeBuildInfo'
+}
+
